@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mony Pizza - Punto de Venta</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .toast { transform: translateY(100px); transition: transform 0.3s ease-out; }
+        .toast.show { transform: translateY(0); }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+    <!-- NOTIFICACIÓN TOAST -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 bg-slate-800 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 toast pointer-events-none">
+        <i data-lucide="check-circle" class="text-green-400"></i>
+        <span id="toast-msg">Producto añadido</span>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        
+        <!-- HEADER -->
+        <header class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-red-600 p-3 rounded-2xl shadow-lg shadow-red-200">
+                    <i data-lucide="pizza" class="text-white w-8 h-8"></i>
+                </div>
+                <div>
+                    <h1 class="text-3xl font-black text-slate-800 tracking-tight">Mony Pizza</h1>
+                    <p class="text-slate-500 font-medium">Terminal de Pedidos v2.0</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4 bg-white p-2 rounded-2xl shadow-sm border border-slate-100">
+                <div class="px-4 py-2 text-right">
+                    <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Hoy es</p>
+                    <p class="text-sm font-semibold text-slate-700" id="current-date"></p>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid lg:grid-cols-12 gap-8">
+            
+            <!-- PANEL IZQUIERDO: MENÚ -->
+            <main class="lg:col-span-8 space-y-8">
+                
+                <!-- CATEGORÍA: PIZZAS -->
+                <section>
+                    <div class="flex items-center gap-2 mb-4">
+                        <i data-lucide="flame" class="text-orange-500 w-5 h-5"></i>
+                        <h2 class="text-xl font-bold text-slate-800 uppercase tracking-wide">Pizzas Especiales</h2>
+                    </div>
+                    <div id="menu-pizzas" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+                </section>
+
+                <!-- CATEGORÍA: OTROS -->
+                <section>
+                    <div class="flex items-center gap-2 mb-4">
+                        <i data-lucide="plus-square" class="text-blue-500 w-5 h-5"></i>
+                        <h2 class="text-xl font-bold text-slate-800 uppercase tracking-wide">Agregados</h2>
+                    </div>
+                    <div id="menu-extras" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4"></div>
+                </section>
+            </main>
+
+            <!-- PANEL DERECHO: CARRITO -->
+            <aside class="lg:col-span-4 h-fit sticky top-6">
+                <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/60 border border-slate-100 flex flex-col max-h-[calc(100vh-120px)]">
+                    <div class="p-6 border-b border-slate-50 flex justify-between items-center">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="shopping-cart" class="text-slate-700 w-5 h-5"></i>
+                            <h2 class="text-lg font-bold text-slate-800">Pedido Actual</h2>
+                        </div>
+                        <button onclick="limpiarCarrito()" class="text-slate-400 hover:text-red-500 transition-colors p-1" title="Vaciar carrito">
+                            <i data-lucide="trash-2" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+
+                    <!-- LISTA PRODUCTOS -->
+                    <div id="carrito-items" class="flex-1 overflow-y-auto p-6 space-y-4 custom-scroll min-h-[250px]">
+                        <!-- Renderizado dinámico -->
+                    </div>
+
+                    <!-- TOTALES -->
+                    <div class="p-6 bg-slate-50 rounded-b-3xl space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-slate-500 font-medium text-lg">Total a pagar</span>
+                            <span class="text-3xl font-black text-slate-900" id="total-amount">$0</span>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="generarPDF()" class="flex items-center justify-center gap-2 bg-white text-slate-700 border border-slate-200 py-3 rounded-2xl font-bold hover:bg-slate-100 transition-all">
+                                <i data-lucide="file-text" class="w-5 h-5"></i>
+                                PDF
+                            </button>
+                            <button onclick="finalizarVenta()" class="flex items-center justify-center gap-2 bg-green-600 text-white py-3 rounded-2xl font-bold hover:bg-green-700 shadow-lg shadow-green-100 transition-all">
+                                <i data-lucide="send" class="w-5 h-5"></i>
+                                WhatsApp
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <script>
+        // CONFIGURACIÓN
+        const WHATSAPP_NUM = "56941809552";
+        const MONEDA = "es-CL";
+
+        // DATOS BASADOS EN IMAGEN (Actualizado: Pepperoni sin orégano)
+        const PIZZAS = [
+            { 
+                id: 1, 
+                nombre: "Pepperoni", 
+                mediana: 6990, 
+                familiar: 9490, 
+                desc: "Salsa de tomate, mozzarella y pepperoni." 
+            },
+            { 
+                id: 2, 
+                nombre: "Dorada Crocante", 
+                mediana: 6490, 
+                familiar: 9990, 
+                desc: "Salsa de tomate, mozzarella, tocino y choclo." 
+            },
+            { 
+                id: 3, 
+                nombre: "Mediterránea", 
+                mediana: 6990, 
+                familiar: 10490, 
+                desc: "Salsa de tomate, mozzarella, aceituna, pimentón, cebolla morada y jamón." 
+            },
+            { 
+                id: 4, 
+                nombre: "Simpleza", 
+                mediana: 5000, 
+                familiar: 7990, 
+                desc: "Salsa de tomate, mozzarella y orégano." 
+            },
+            { 
+                id: 5, 
+                nombre: "Margarita", 
+                mediana: 6490, 
+                familiar: 9990, 
+                desc: "Salsa de tomate, mozzarella, albahaca, tomate y orégano." 
+            },
+            { 
+                id: 6, 
+                nombre: "Pizzatón", 
+                mediana: 6490, 
+                familiar: 9990, 
+                desc: "Salsa de tomate, mozzarella, pimentón, tomate, cebolla y choclo." 
+            }
+        ];
+
+        const EXTRAS = [
+            { id: 101, nombre: "Queso Extra", precio: 1000, icono: "🧀" },
+            { id: 102, nombre: "Choclo Extra", precio: 1000, icono: "🌽" },
+            { id: 103, nombre: "Pepperoni Extra", precio: 1000, icono: "🍕" },
+            { id: 104, nombre: "Cebolla Extra", precio: 1000, icono: "🧅" },
+            { id: 105, nombre: "Jamón Extra", precio: 1000, icono: "🍖" },
+            { id: 106, nombre: "Pimentón Extra", precio: 1000, icono: "🫑" },
+            { id: 107, nombre: "Tocino Extra", precio: 1000, icono: "🥓" },
+            { id: 108, nombre: "Tomate Extra", precio: 1000, icono: "🍅" }
+        ];
+
+        let carrito = [];
+
+        // UTILIDADES
+        const f = (n) => new Intl.NumberFormat(MONEDA, { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n);
+        
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2500);
+        }
+
+        // RENDERIZADO DE MENÚ
+        function renderMenu() {
+            const containerPizzas = document.getElementById('menu-pizzas');
+            const containerExtras = document.getElementById('menu-extras');
+
+            containerPizzas.innerHTML = PIZZAS.map(p => `
+                <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all group flex flex-col h-full">
+                    <h3 class="text-lg font-bold text-slate-800">${p.nombre}</h3>
+                    <p class="text-[11px] text-slate-400 mb-4 flex-1 line-clamp-3">${p.desc}</p>
+                    <div class="flex gap-2">
+                        <button onclick="agregar('${p.nombre} (Med)', ${p.mediana})" class="flex-1 bg-slate-50 hover:bg-red-50 text-slate-700 hover:text-red-600 p-2 rounded-xl text-xs font-bold transition-colors">
+                            Mediana<br>${f(p.mediana)}
+                        </button>
+                        <button onclick="agregar('${p.nombre} (Fam)', ${p.familiar})" class="flex-1 bg-slate-50 hover:bg-red-50 text-slate-700 hover:text-red-600 p-2 rounded-xl text-xs font-bold transition-colors">
+                            Familiar<br>${f(p.familiar)}
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            containerExtras.innerHTML = EXTRAS.map(e => `
+                <button onclick="agregar('${e.nombre}', ${e.precio})" class="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all text-center flex flex-col items-center gap-1 group">
+                    <span class="text-2xl group-hover:scale-125 transition-transform">${e.icono}</span>
+                    <span class="text-xs font-bold text-slate-700 leading-tight">${e.nombre}</span>
+                    <span class="text-[10px] font-medium text-slate-400">${f(e.precio)}</span>
+                </button>
+            `).join('');
+        }
+
+        // LÓGICA DEL CARRITO
+        function agregar(nombre, precio) {
+            const itemExistente = carrito.find(i => i.nombre === nombre);
+            if (itemExistente) {
+                itemExistente.cantidad++;
+            } else {
+                carrito.push({ id: Date.now(), nombre, precio, cantidad: 1 });
+            }
+            showToast(`Añadido: ${nombre}`);
+            renderCarrito();
+        }
+
+        function cambiarCantidad(id, delta) {
+            const item = carrito.find(i => i.id === id);
+            if (item) {
+                item.cantidad += delta;
+                if (item.cantidad <= 0) {
+                    carrito = carrito.filter(i => i.id !== id);
+                }
+                renderCarrito();
+            }
+        }
+
+        function limpiarCarrito() {
+            if (carrito.length > 0) {
+                carrito = [];
+                renderCarrito();
+                showToast("Carrito vaciado");
+            }
+        }
+
+        function renderCarrito() {
+            const container = document.getElementById('carrito-items');
+            const totalDisplay = document.getElementById('total-amount');
+
+            if (carrito.length === 0) {
+                container.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-48 text-slate-300">
+                        <i data-lucide="shopping-bag" class="w-12 h-12 mb-2"></i>
+                        <p class="font-medium">Sin productos aún</p>
+                    </div>
+                `;
+                totalDisplay.innerText = f(0);
+                lucide.createIcons();
+                return;
+            }
+
+            let total = 0;
+            container.innerHTML = carrito.map(item => {
+                const subtotal = item.precio * item.cantidad;
+                total += subtotal;
+                return `
+                    <div class="flex justify-between items-center group">
+                        <div class="space-y-1 pr-2">
+                            <h4 class="font-bold text-slate-800 text-sm">${item.nombre}</h4>
+                            <p class="text-xs text-slate-400 font-medium">${f(item.precio)} c/u</p>
+                        </div>
+                        <div class="flex items-center gap-3 bg-slate-100 p-1 rounded-xl shrink-0">
+                            <button onclick="cambiarCantidad(${item.id}, -1)" class="w-7 h-7 flex items-center justify-center bg-white rounded-lg shadow-sm hover:text-red-500 transition-colors">
+                                <i data-lucide="minus" class="w-4 h-4"></i>
+                            </button>
+                            <span class="text-sm font-bold text-slate-700 w-4 text-center">${item.cantidad}</span>
+                            <button onclick="cambiarCantidad(${item.id}, 1)" class="w-7 h-7 flex items-center justify-center bg-white rounded-lg shadow-sm hover:text-green-500 transition-colors">
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            totalDisplay.innerText = f(total);
+            lucide.createIcons();
+        }
+
+        // ACCIONES FINALES
+        function finalizarVenta() {
+            if (carrito.length === 0) return showToast("El carrito está vacío");
+
+            let total = 0;
+            let mensaje = "🍕 *NUEVO PEDIDO - MONY PIZZA*%0A";
+            mensaje += "---------------------------------%0A";
+            
+            carrito.forEach(i => {
+                const sub = i.precio * i.cantidad;
+                total += sub;
+                mensaje += `• ${i.cantidad}x ${i.nombre} (${f(sub)})%0A`;
+            });
+
+            mensaje += "---------------------------------%0A";
+            mensaje += `💰 *TOTAL A PAGAR: ${f(total)}*%0A%0A`;
+            mensaje += "📍 _Por favor, confirmar dirección y medio de pago._";
+
+            window.open(`https://wa.me/${WHATSAPP_NUM}?text=${mensaje}`);
+        }
+
+        async function generarPDF() {
+            if (carrito.length === 0) return showToast("El carrito está vacío");
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            let total = 0;
+            const hoy = new Date().toLocaleString();
+
+            // Estilos del PDF
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(22);
+            doc.setTextColor(220, 38, 38);
+            doc.text("MONY PIZZA", 20, 25);
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text("Ticket de Pedido - No Válido como Factura", 20, 32);
+            doc.text(`Fecha: ${hoy}`, 130, 32);
+
+            doc.setDrawColor(200);
+            doc.line(20, 38, 190, 38);
+
+            // Tabla de productos
+            doc.setFontSize(12);
+            doc.setTextColor(50);
+            doc.text("Cant.", 20, 50);
+            doc.text("Producto", 40, 50);
+            doc.text("Subtotal", 160, 50, { align: "right" });
+
+            doc.setFont("helvetica", "normal");
+            let y = 60;
+            carrito.forEach(i => {
+                const sub = i.precio * i.cantidad;
+                total += sub;
+                doc.text(i.cantidad.toString(), 20, y);
+                doc.text(i.nombre, 40, y);
+                doc.text(f(sub), 160, y, { align: "right" });
+                y += 10;
+            });
+
+            doc.setDrawColor(200);
+            doc.line(20, y, 190, y);
+            
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(16);
+            doc.text("TOTAL:", 110, y + 15);
+            doc.text(f(total), 160, y + 15, { align: "right" });
+
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "italic");
+            doc.text("¡Gracias por preferir Mony Pizza!", 105, y + 35, { align: "center" });
+
+            doc.save(`Pedido_${Date.now()}.pdf`);
+            showToast("PDF generado con éxito");
+        }
+
+        // INICIALIZACIÓN
+        document.getElementById('current-date').innerText = new Intl.DateTimeFormat('es-ES', { dateStyle: 'long' }).format(new Date());
+        renderMenu();
+        renderCarrito();
+        lucide.createIcons();
+
+    </script>
+</body>
+</html>
